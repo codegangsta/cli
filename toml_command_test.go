@@ -1,37 +1,35 @@
-package altsrc
+package cli
 
 import (
 	"flag"
 	"io/ioutil"
 	"os"
 	"testing"
-
-	"github.com/urfave/cli/v2"
 )
 
 func TestCommandTomFileTest(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("test = 15"), 0666)
 	defer os.Remove("current.toml")
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("test")
 			expect(t, val, 15)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "test"}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "test", AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 	err := command.Run(c)
@@ -40,7 +38,7 @@ func TestCommandTomFileTest(t *testing.T) {
 }
 
 func TestCommandTomlFileTestGlobalEnvVarWins(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("test = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -50,21 +48,21 @@ func TestCommandTomlFileTestGlobalEnvVarWins(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("test")
 			expect(t, val, 10)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "test", EnvVars: []string{"THE_TEST"}}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "test", EnvVars: []string{"THE_TEST"}, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -74,7 +72,7 @@ func TestCommandTomlFileTestGlobalEnvVarWins(t *testing.T) {
 }
 
 func TestCommandTomlFileTestGlobalEnvVarWinsNested(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("[top]\ntest = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -84,21 +82,21 @@ func TestCommandTomlFileTestGlobalEnvVarWinsNested(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("top.test")
 			expect(t, val, 10)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "top.test", EnvVars: []string{"THE_TEST"}}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "top.test", EnvVars: []string{"THE_TEST"}, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -108,7 +106,7 @@ func TestCommandTomlFileTestGlobalEnvVarWinsNested(t *testing.T) {
 }
 
 func TestCommandTomlFileTestSpecifiedFlagWins(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("test = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -116,21 +114,21 @@ func TestCommandTomlFileTestSpecifiedFlagWins(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml", "--test", "7"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("test")
 			expect(t, val, 7)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "test"}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "test", AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -140,7 +138,7 @@ func TestCommandTomlFileTestSpecifiedFlagWins(t *testing.T) {
 }
 
 func TestCommandTomlFileTestSpecifiedFlagWinsNested(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte(`[top]
   test = 15`), 0666)
@@ -149,21 +147,21 @@ func TestCommandTomlFileTestSpecifiedFlagWinsNested(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml", "--top.test", "7"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("top.test")
 			expect(t, val, 7)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "top.test"}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "top.test", AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -173,7 +171,7 @@ func TestCommandTomlFileTestSpecifiedFlagWinsNested(t *testing.T) {
 }
 
 func TestCommandTomlFileTestDefaultValueFileWins(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("test = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -181,21 +179,21 @@ func TestCommandTomlFileTestDefaultValueFileWins(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("test")
 			expect(t, val, 15)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "test", Value: 7}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "test", Value: 7, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -205,7 +203,7 @@ func TestCommandTomlFileTestDefaultValueFileWins(t *testing.T) {
 }
 
 func TestCommandTomlFileTestDefaultValueFileWinsNested(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("[top]\ntest = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -213,21 +211,21 @@ func TestCommandTomlFileTestDefaultValueFileWinsNested(t *testing.T) {
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("top.test")
 			expect(t, val, 15)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "top.test", Value: 7}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "top.test", Value: 7, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 
@@ -237,7 +235,7 @@ func TestCommandTomlFileTestDefaultValueFileWinsNested(t *testing.T) {
 }
 
 func TestCommandTomlFileFlagHasDefaultGlobalEnvTomlSetGlobalEnvWins(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("test = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -248,21 +246,21 @@ func TestCommandTomlFileFlagHasDefaultGlobalEnvTomlSetGlobalEnvWins(t *testing.T
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("test")
 			expect(t, val, 11)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "test", Value: 7, EnvVars: []string{"THE_TEST"}}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "test", Value: 7, EnvVars: []string{"THE_TEST"}, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 	err := command.Run(c)
@@ -271,7 +269,7 @@ func TestCommandTomlFileFlagHasDefaultGlobalEnvTomlSetGlobalEnvWins(t *testing.T
 }
 
 func TestCommandTomlFileFlagHasDefaultGlobalEnvTomlSetGlobalEnvWinsNested(t *testing.T) {
-	app := &cli.App{}
+	app := &App{}
 	set := flag.NewFlagSet("test", 0)
 	_ = ioutil.WriteFile("current.toml", []byte("[top]\ntest = 15"), 0666)
 	defer os.Remove("current.toml")
@@ -282,21 +280,21 @@ func TestCommandTomlFileFlagHasDefaultGlobalEnvTomlSetGlobalEnvWinsNested(t *tes
 	test := []string{"test-cmd", "--load", "current.toml"}
 	_ = set.Parse(test)
 
-	c := cli.NewContext(app, set, nil)
+	c := NewContext(app, set, nil)
 
-	command := &cli.Command{
+	command := &Command{
 		Name:        "test-cmd",
 		Aliases:     []string{"tc"},
 		Usage:       "this is for testing",
 		Description: "testing",
-		Action: func(c *cli.Context) error {
+		Action: func(c *Context) error {
 			val := c.Int("top.test")
 			expect(t, val, 11)
 			return nil
 		},
-		Flags: []cli.Flag{
-			NewIntFlag(&cli.IntFlag{Name: "top.test", Value: 7, EnvVars: []string{"THE_TEST"}}),
-			&cli.StringFlag{Name: "load"}},
+		Flags: []Flag{
+			&IntFlag{Name: "top.test", Value: 7, EnvVars: []string{"THE_TEST"}, AlternateSource: true},
+			&StringFlag{Name: "load"}},
 	}
 	command.Before = InitInputSourceWithContext(command.Flags, NewTomlSourceFromFlagFunc("load"))
 	err := command.Run(c)

@@ -1,11 +1,10 @@
-package altsrc
+package cli
 
 import (
 	"fmt"
 	"reflect"
 
 	"github.com/BurntSushi/toml"
-	"github.com/urfave/cli/v2"
 )
 
 type tomlMap struct {
@@ -81,12 +80,12 @@ func NewTomlSourceFromFile(file string) (InputSourceContext, error) {
 	if err := readCommandToml(tsc.FilePath, &results); err != nil {
 		return nil, fmt.Errorf("Unable to load TOML file '%s': inner error: \n'%v'", tsc.FilePath, err.Error())
 	}
-	return &MapInputSource{file: file, valueMap: results.Map}, nil
+	return &mapInputSource{file: file, valueMap: results.Map}, nil
 }
 
 // NewTomlSourceFromFlagFunc creates a new TOML InputSourceContext from a provided flag name and source context.
-func NewTomlSourceFromFlagFunc(flagFileName string) func(context *cli.Context) (InputSourceContext, error) {
-	return func(context *cli.Context) (InputSourceContext, error) {
+func NewTomlSourceFromFlagFunc(flagFileName string) func(context *Context) (InputSourceContext, error) {
+	return func(context *Context) (InputSourceContext, error) {
 		filePath := context.String(flagFileName)
 		return NewTomlSourceFromFile(filePath)
 	}

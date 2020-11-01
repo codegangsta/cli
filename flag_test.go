@@ -210,23 +210,38 @@ var prefixStringFlagTests = []struct {
 	expected string
 }{
 	{name: "foo", usage: "", value: "", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: foo, ph: value\t"},
 	{name: "f", usage: "", value: "", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: f, ph: value\t"},
 	{name: "f", usage: "The total `foo` desired", value: "all", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: f, ph: foo\tThe total foo desired (default: \"all\")"},
 	{name: "test", usage: "", value: "Something", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: test, ph: value\t(default: \"Something\")"},
 	{name: "config", aliases: []string{"c"}, usage: "Load configuration from `FILE`", value: "", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: config,c, ph: FILE\tLoad configuration from FILE"},
 	{name: "config", aliases: []string{"c"}, usage: "Load configuration from `CONFIG`", value: "config.json", prefixer: func(a []string, b string) string {
-		return fmt.Sprintf("name: %s, ph: %s", a, b)
+		return fmt.Sprintf("name: %s, ph: %s", strings.Join(a, ","), b)
 	}, expected: "name: config,c, ph: CONFIG\tLoad configuration from CONFIG (default: \"config.json\")"},
+}
+
+func TestFlagNamePrefixer(t *testing.T) {
+	defer func() {
+		FlagNamePrefixer = prefixedNames
+	}()
+
+	for _, test := range prefixStringFlagTests {
+		FlagNamePrefixer = test.prefixer
+		flag := StringFlag{Name: test.name, Aliases: test.aliases, Usage: test.usage, Value: test.value}
+		output := flag.String()
+		if output != test.expected {
+			t.Errorf("%q does not match %q", output, test.expected)
+		}
+	}
 }
 
 func TestStringFlagApply_SetsAllNames(t *testing.T) {
@@ -297,33 +312,68 @@ var envHintFlagTests = []struct {
 	expected string
 }{
 	{"foo", "", func(a []string, b string) string {
-		return fmt.Sprintf("env: %s, str: %s", a, b)
+		return fmt.Sprintf("env: %s, str: %s", strings.Join(a, ","), b)
 	}, "env: , str: --foo value\t"},
 	{"f", "", func(a []string, b string) string {
-		return fmt.Sprintf("env: %s, str: %s", a, b)
+		return fmt.Sprintf("env: %s, str: %s", strings.Join(a, ","), b)
 	}, "env: , str: -f value\t"},
 	{"foo", "ENV_VAR", func(a []string, b string) string {
-		return fmt.Sprintf("env: %s, str: %s", a, b)
+		return fmt.Sprintf("env: %s, str: %s", strings.Join(a, ","), b)
 	}, "env: ENV_VAR, str: --foo value\t"},
 	{"f", "ENV_VAR", func(a []string, b string) string {
-		return fmt.Sprintf("env: %s, str: %s", a, b)
+		return fmt.Sprintf("env: %s, str: %s", strings.Join(a, ","), b)
 	}, "env: ENV_VAR, str: -f value\t"},
 }
 
-//func TestFlagEnvHinter(t *testing.T) {
-//	defer func() {
-//		FlagEnvHinter = withEnvHint
-//	}()
-//
-//	for _, test := range envHintFlagTests {
-//		FlagEnvHinter = test.hinter
-//		fl := StringFlag{Name: test.name, EnvVars: []string{test.env}}
-//		output := fl.String()
-//		if output != test.expected {
-//			t.Errorf("%q does not match %q", output, test.expected)
-//		}
-//	}
-//}
+func TestFlagEnvHinter(t *testing.T) {
+	defer func() {
+		FlagEnvHinter = withEnvHint
+	}()
+
+	for _, test := range envHintFlagTests {
+		FlagEnvHinter = test.hinter
+		fl := StringFlag{Name: test.name, EnvVars: []string{test.env}}
+		output := fl.String()
+		if output != test.expected {
+			t.Errorf("%q does not match %q", output, test.expected)
+		}
+	}
+}
+
+var fileHintFlagTests = []struct {
+	name     string
+	path     string
+	hinter   FlagFileHintFunc
+	expected string
+}{
+	{"foo", "", func(a string, b string) string {
+		return fmt.Sprintf("path: %s, str: %s", a, b)
+	}, "path: , str: --foo value\t"},
+	{"f", "", func(a string, b string) string {
+		return fmt.Sprintf("path: %s, str: %s", a, b)
+	}, "path: , str: -f value\t"},
+	{"foo", "/home/ajitem", func(a string, b string) string {
+		return fmt.Sprintf("path: %s, str: %s", a, b)
+	}, "path: /home/ajitem, str: --foo value\t"},
+	{"f", "/Users/ajitem/Documents", func(a string, b string) string {
+		return fmt.Sprintf("path: %s, str: %s", a, b)
+	}, "path: /Users/ajitem/Documents, str: -f value\t"},
+}
+
+func TestFlagFileHinter(t *testing.T) {
+	defer func() {
+		FlagFileHinter = withFileHint
+	}()
+
+	for _, test := range fileHintFlagTests {
+		FlagFileHinter = test.hinter
+		fl := StringFlag{Name: test.name, TakesFile: true, FilePath: test.path}
+		output := fl.String()
+		if output != test.expected {
+			t.Errorf("%q does not match %q", output, test.expected)
+		}
+	}
+}
 
 var stringSliceFlagTests = []struct {
 	name     string
@@ -1677,6 +1727,328 @@ func TestInt64Slice_Serialized_Set(t *testing.T) {
 	if sl0.String() != sl1.String() {
 		t.Fatalf("pre and post serialization do not match: %v != %v", sl0, sl1)
 	}
+}
+
+// tests from altsrc
+type testApplyInputSource struct {
+	Flag               FlagInputSourceExtension
+	FlagName           string
+	FlagSetName        string
+	Expected           string
+	ContextValueString string
+	ContextValue       flag.Value
+	EnvVarValue        string
+	EnvVarName         string
+	SourcePath         string
+	MapValue           interface{}
+}
+
+func TestGenericApplyInputSourceValue(t *testing.T) {
+	v := &Parser{"abc", "def"}
+	c := runTest(t, testApplyInputSource{
+		Flag:     &GenericFlag{Name: "test", Value: &Parser{}, AlternateSource: true},
+		FlagName: "test",
+		MapValue: v,
+	})
+	expect(t, v, c.Generic("test"))
+}
+
+func TestGenericApplyInputSourceMethodContextSet(t *testing.T) {
+	p := &Parser{"abc", "def"}
+	c := runTest(t, testApplyInputSource{
+		Flag:               &GenericFlag{Name: "test", Value: &Parser{}, AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           &Parser{"efg", "hig"},
+		ContextValueString: p.String(),
+	})
+	expect(t, p, c.Generic("test"))
+}
+
+func TestGenericApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag: &GenericFlag{
+			Name:    "test",
+			Value:   &Parser{},
+			EnvVars: []string{"TEST"},
+		},
+		FlagName:    "test",
+		MapValue:    &Parser{"efg", "hij"},
+		EnvVarName:  "TEST",
+		EnvVarValue: "abc,def",
+	})
+	expect(t, &Parser{"abc", "def"}, c.Generic("test"))
+}
+
+func TestStringSliceApplyInputSourceValue(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &StringSliceFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: []interface{}{"hello", "world"},
+	})
+	expect(t, c.StringSlice("test"), []string{"hello", "world"})
+}
+
+func TestStringSliceApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &StringSliceFlag{Name: "test"},
+		FlagName:           "test",
+		MapValue:           []interface{}{"hello", "world"},
+		ContextValueString: "ohno",
+	})
+	expect(t, c.StringSlice("test"), []string{"ohno"})
+}
+
+func TestStringSliceApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &StringSliceFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    []interface{}{"hello", "world"},
+		EnvVarName:  "TEST",
+		EnvVarValue: "oh,no",
+	})
+	expect(t, c.StringSlice("test"), []string{"oh", "no"})
+}
+
+func TestIntSliceApplyInputSourceValue(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &IntSliceFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: []interface{}{1, 2},
+	})
+	expect(t, c.IntSlice("test"), []int{1, 2})
+}
+
+func TestIntSliceApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &IntSliceFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           []interface{}{1, 2},
+		ContextValueString: "3",
+	})
+	expect(t, c.IntSlice("test"), []int{3})
+}
+
+func TestIntSliceApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &IntSliceFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    []interface{}{1, 2},
+		EnvVarName:  "TEST",
+		EnvVarValue: "3,4",
+	})
+	expect(t, c.IntSlice("test"), []int{3, 4})
+}
+
+func TestBoolApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &BoolFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: true,
+	})
+	expect(t, true, c.Bool("test"))
+}
+
+func TestBoolApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &BoolFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           false,
+		ContextValueString: "true",
+	})
+	expect(t, true, c.Bool("test"))
+}
+
+func TestBoolApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &BoolFlag{Name: "test", EnvVars: []string{"TEST"}, AlternateSource: true},
+		FlagName:    "test",
+		MapValue:    false,
+		EnvVarName:  "TEST",
+		EnvVarValue: "true",
+	})
+	expect(t, true, c.Bool("test"))
+}
+
+func TestStringApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &StringFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: "hello",
+	})
+	expect(t, "hello", c.String("test"))
+}
+
+func TestStringApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &StringFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           "hello",
+		ContextValueString: "goodbye",
+	})
+	expect(t, "goodbye", c.String("test"))
+}
+
+func TestStringApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &StringFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    "hello",
+		EnvVarName:  "TEST",
+		EnvVarValue: "goodbye",
+	})
+	expect(t, "goodbye", c.String("test"))
+}
+func TestPathApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:       &PathFlag{Name: "test", AlternateSource: true},
+		FlagName:   "test",
+		MapValue:   "hello",
+		SourcePath: "/path/to/source/file",
+	})
+
+	expected := "/path/to/source/hello"
+	if runtime.GOOS == "windows" {
+		expected = `D:\path\to\source\hello`
+	}
+	expect(t, expected, c.String("test"))
+}
+
+func TestPathApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &PathFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           "hello",
+		ContextValueString: "goodbye",
+		SourcePath:         "/path/to/source/file",
+	})
+	expect(t, "goodbye", c.String("test"))
+}
+
+func TestPathApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &PathFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    "hello",
+		EnvVarName:  "TEST",
+		EnvVarValue: "goodbye",
+		SourcePath:  "/path/to/source/file",
+	})
+	expect(t, "goodbye", c.String("test"))
+}
+
+func TestIntApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &IntFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: 15,
+	})
+	expect(t, 15, c.Int("test"))
+}
+
+func TestIntApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &IntFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           15,
+		ContextValueString: "7",
+	})
+	expect(t, 7, c.Int("test"))
+}
+
+func TestIntApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &IntFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    15,
+		EnvVarName:  "TEST",
+		EnvVarValue: "12",
+	})
+	expect(t, 12, c.Int("test"))
+}
+
+func TestDurationApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &DurationFlag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: 30 * time.Second,
+	})
+	expect(t, 30*time.Second, c.Duration("test"))
+}
+
+func TestDurationApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &DurationFlag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           30 * time.Second,
+		ContextValueString: (15 * time.Second).String(),
+	})
+	expect(t, 15*time.Second, c.Duration("test"))
+}
+
+func TestDurationApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &DurationFlag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    30 * time.Second,
+		EnvVarName:  "TEST",
+		EnvVarValue: (15 * time.Second).String(),
+	})
+	expect(t, 15*time.Second, c.Duration("test"))
+}
+
+func TestFloat64ApplyInputSourceMethodSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:     &Float64Flag{Name: "test", AlternateSource: true},
+		FlagName: "test",
+		MapValue: 1.3,
+	})
+	expect(t, 1.3, c.Float64("test"))
+}
+
+func TestFloat64ApplyInputSourceMethodContextSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:               &Float64Flag{Name: "test", AlternateSource: true},
+		FlagName:           "test",
+		MapValue:           1.3,
+		ContextValueString: fmt.Sprintf("%v", 1.4),
+	})
+	expect(t, 1.4, c.Float64("test"))
+}
+
+func TestFloat64ApplyInputSourceMethodEnvVarSet(t *testing.T) {
+	c := runTest(t, testApplyInputSource{
+		Flag:        &Float64Flag{Name: "test", EnvVars: []string{"TEST"}},
+		FlagName:    "test",
+		MapValue:    1.3,
+		EnvVarName:  "TEST",
+		EnvVarValue: fmt.Sprintf("%v", 1.4),
+	})
+	expect(t, 1.4, c.Float64("test"))
+}
+
+func runTest(t *testing.T, test testApplyInputSource) *Context {
+	inputSource := &mapInputSource{
+		file:     test.SourcePath,
+		valueMap: map[interface{}]interface{}{test.FlagName: test.MapValue},
+	}
+	set := flag.NewFlagSet(test.FlagSetName, flag.ContinueOnError)
+	c := NewContext(nil, set, nil)
+	if test.EnvVarName != "" && test.EnvVarValue != "" {
+		_ = os.Setenv(test.EnvVarName, test.EnvVarValue)
+		defer os.Setenv(test.EnvVarName, "")
+	}
+
+	_ = test.Flag.Apply(set)
+	if test.ContextValue != nil {
+		f := set.Lookup(test.FlagName)
+		f.Value = test.ContextValue
+	}
+	if test.ContextValueString != "" {
+		_ = set.Set(test.FlagName, test.ContextValueString)
+	}
+	_ = test.Flag.ApplyInputSourceValue(c, inputSource)
+
+	return c
 }
 
 func TestTimestamp_set(t *testing.T) {
