@@ -247,7 +247,7 @@ func (a *App) RunContext(ctx context.Context, arguments []string) (err error) {
 	nerr := normalizeFlags(a.Flags, set)
 	context := NewContext(a, set, &Context{Context: ctx})
 	if nerr != nil {
-		_, _ = fmt.Fprintln(a.Writer, nerr)
+		_, _ = fmt.Fprintln(a.ErrWriter, nerr)
 		_ = ShowAppHelp(context)
 		return nerr
 	}
@@ -263,7 +263,7 @@ func (a *App) RunContext(ctx context.Context, arguments []string) (err error) {
 			a.handleExitCoder(context, err)
 			return err
 		}
-		_, _ = fmt.Fprintf(a.Writer, "%s %s\n\n", "Incorrect Usage.", err.Error())
+		_, _ = fmt.Fprintf(a.ErrWriter, "%s %s\n\n", "Incorrect Usage.", err.Error())
 		_ = ShowAppHelp(context)
 		return err
 	}
@@ -362,8 +362,8 @@ func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 	context := NewContext(a, set, ctx)
 
 	if nerr != nil {
-		_, _ = fmt.Fprintln(a.Writer, nerr)
-		_, _ = fmt.Fprintln(a.Writer)
+		_, _ = fmt.Fprintln(a.ErrWriter, nerr)
+		_, _ = fmt.Fprintln(a.ErrWriter)
 		if len(a.Commands) > 0 {
 			_ = ShowSubcommandHelp(context)
 		} else {
@@ -382,7 +382,7 @@ func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 			a.handleExitCoder(context, err)
 			return err
 		}
-		_, _ = fmt.Fprintf(a.Writer, "%s %s\n\n", "Incorrect Usage.", err.Error())
+		_, _ = fmt.Fprintf(a.ErrWriter, "%s %s\n\n", "Incorrect Usage.", err.Error())
 		_ = ShowSubcommandHelp(context)
 		return err
 	}

@@ -78,7 +78,7 @@ func ShowAppHelp(c *Context) error {
 	}
 
 	if c.App.ExtraInfo == nil {
-		HelpPrinter(c.App.Writer, tpl, c.App)
+		HelpPrinter(c.App.ErrWriter, tpl, c.App)
 		return nil
 	}
 
@@ -87,7 +87,7 @@ func ShowAppHelp(c *Context) error {
 			"ExtraInfo": c.App.ExtraInfo,
 		}
 	}
-	HelpPrinterCustom(c.App.Writer, tpl, c.App, customAppData())
+	HelpPrinterCustom(c.App.ErrWriter, tpl, c.App, customAppData())
 
 	return nil
 }
@@ -164,17 +164,17 @@ func DefaultCompleteWithFlags(cmd *Command) func(c *Context) {
 		if len(os.Args) > 2 {
 			lastArg := os.Args[len(os.Args)-2]
 			if strings.HasPrefix(lastArg, "-") {
-				printFlagSuggestions(lastArg, c.App.Flags, c.App.Writer)
+				printFlagSuggestions(lastArg, c.App.Flags, c.App.ErrWriter)
 				if cmd != nil {
-					printFlagSuggestions(lastArg, cmd.Flags, c.App.Writer)
+					printFlagSuggestions(lastArg, cmd.Flags, c.App.ErrWriter)
 				}
 				return
 			}
 		}
 		if cmd != nil {
-			printCommandSuggestions(cmd.Subcommands, c.App.Writer)
+			printCommandSuggestions(cmd.Subcommands, c.App.ErrWriter)
 		} else {
-			printCommandSuggestions(c.App.Commands, c.App.Writer)
+			printCommandSuggestions(c.App.Commands, c.App.ErrWriter)
 		}
 	}
 }
@@ -189,7 +189,7 @@ func ShowCommandHelpAndExit(c *Context, command string, code int) {
 func ShowCommandHelp(ctx *Context, command string) error {
 	// show the subcommand help for a command with subcommands
 	if command == "" {
-		HelpPrinter(ctx.App.Writer, SubcommandHelpTemplate, ctx.App)
+		HelpPrinter(ctx.App.ErrWriter, SubcommandHelpTemplate, ctx.App)
 		return nil
 	}
 
@@ -200,7 +200,7 @@ func ShowCommandHelp(ctx *Context, command string) error {
 				templ = CommandHelpTemplate
 			}
 
-			HelpPrinter(ctx.App.Writer, templ, c)
+			HelpPrinter(ctx.App.ErrWriter, templ, c)
 
 			return nil
 		}
@@ -239,7 +239,7 @@ func ShowVersion(c *Context) {
 }
 
 func printVersion(c *Context) {
-	_, _ = fmt.Fprintf(c.App.Writer, "%v version %v\n", c.App.Name, c.App.Version)
+	_, _ = fmt.Fprintf(c.App.ErrWriter, "%v version %v\n", c.App.Name, c.App.Version)
 }
 
 // ShowCompletions prints the lists of commands within a given context
