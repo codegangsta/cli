@@ -89,14 +89,10 @@ func (f GenericFlag) Apply(set *flag.FlagSet) error {
 // Generic looks up the value of a local GenericFlag, returns
 // nil if not found
 func (c *Context) Generic(name string) interface{} {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		return lookupGeneric(name, fs)
-	}
-	return nil
+	return lookupGeneric(c.resolveFlagDeep(name))
 }
 
-func lookupGeneric(name string, set *flag.FlagSet) interface{} {
-	f := set.Lookup(name)
+func lookupGeneric(f *flag.Flag) interface{} {
 	if f != nil {
 		parsed, err := f.Value, error(nil)
 		if err != nil {

@@ -76,14 +76,10 @@ func (f *StringFlag) Apply(set *flag.FlagSet) error {
 // String looks up the value of a local StringFlag, returns
 // "" if not found
 func (c *Context) String(name string) string {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		return lookupString(name, fs)
-	}
-	return ""
+	return lookupString(c.resolveFlagDeep(name))
 }
 
-func lookupString(name string, set *flag.FlagSet) string {
-	f := set.Lookup(name)
+func lookupString(f *flag.Flag) string {
 	if f != nil {
 		parsed, err := f.Value.String(), error(nil)
 		if err != nil {

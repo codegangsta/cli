@@ -86,14 +86,10 @@ func (f *UintFlag) GetValue() string {
 // Uint looks up the value of a local UintFlag, returns
 // 0 if not found
 func (c *Context) Uint(name string) uint {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		return lookupUint(name, fs)
-	}
-	return 0
+	return lookupUint(c.resolveFlagDeep(name))
 }
 
-func lookupUint(name string, set *flag.FlagSet) uint {
-	f := set.Lookup(name)
+func lookupUint(f *flag.Flag) uint {
 	if f != nil {
 		parsed, err := strconv.ParseUint(f.Value.String(), 0, 64)
 		if err != nil {

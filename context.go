@@ -18,6 +18,7 @@ type Context struct {
 	Command       *Command
 	shellComplete bool
 	flagSet       *flag.FlagSet
+	fromFlagSet   map[string]bool
 	parentContext *Context
 }
 
@@ -30,6 +31,14 @@ func NewContext(app *App, set *flag.FlagSet, parentCtx *Context) *Context {
 		if parentCtx.flagSet == nil {
 			parentCtx.flagSet = &flag.FlagSet{}
 		}
+	}
+
+	// pre-compute flag seen on the command line at this context
+	c.fromFlagSet = make(map[string]bool)
+	if set != nil {
+		set.Visit(func(f *flag.Flag) {
+			c.fromFlagSet[f.Name] = true
+		})
 	}
 
 	c.Command = &Command{}
@@ -48,33 +57,48 @@ func (c *Context) NumFlags() int {
 
 // Set sets a context flag to a value.
 func (c *Context) Set(name, value string) error {
-	return c.flagSet.Set(name, value)
+	err := c.flagSet.Set(name, value)
+	if err == nil {
+		c.fromFlagSet[name] = true
+	}
+
+	return err
 }
 
 // IsSet determines if the flag was actually set
 func (c *Context) IsSet(name string) bool {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		if fs := lookupFlagSet(name, c); fs != nil {
-			isSet := false
-			fs.Visit(func(f *flag.Flag) {
-				if f.Name == name {
-					isSet = true
+	for ctx := c; ctx != nil; ctx = ctx.parentContext {
+		// try flags parsed from command line first
+		if ctx.flagSet.Lookup(name) == nil {
+			// flag not defined in this context
+			continue
+		}
+		if ctx.flagOnCommandLine(name) {
+			return true
+		}
+
+		// now see if value was set externally via environment
+		definedFlags := ctx.Command.Flags
+		if ctx.Command.Name == "" && ctx.App != nil {
+			definedFlags = ctx.App.Flags
+		}
+		for _, ff := range definedFlags {
+			for _, fn := range ff.Names() {
+				if fn == name {
+					if ff.IsSet() {
+						return true
+					}
+					break
 				}
-			})
-			if isSet {
-				return true
 			}
 		}
-
-		f := lookupFlag(name, c)
-		if f == nil {
-			return false
-		}
-
-		return f.IsSet()
 	}
 
 	return false
+}
+
+func (c *Context) flagOnCommandLine(name string) bool {
+	return c.fromFlagSet[name]
 }
 
 // LocalFlagNames returns a slice of flag names used in this context.
@@ -151,6 +175,25 @@ func lookupFlag(name string, ctx *Context) Flag {
 	}
 
 	return nil
+}
+
+func (c *Context) resolveFlagDeep(name string) *flag.Flag {
+	var src *flag.Flag
+	for cur := c; cur != nil; cur = cur.parentContext {
+		if f := cur.flagSet.Lookup(name); f != nil {
+			if cur.flagOnCommandLine(name) {
+				// we've found most specific instance on command line, use it
+				src = f
+				break
+			}
+			if src == nil {
+				// flag was defined, but value is not present among flags of the current context
+				// remember the most specific instance of the flag not from command line as fallback
+				src = f
+			}
+		}
+	}
+	return src
 }
 
 func lookupFlagSet(name string, ctx *Context) *flag.FlagSet {

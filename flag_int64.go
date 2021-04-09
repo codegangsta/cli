@@ -86,14 +86,10 @@ func (f *Int64Flag) Apply(set *flag.FlagSet) error {
 // Int64 looks up the value of a local Int64Flag, returns
 // 0 if not found
 func (c *Context) Int64(name string) int64 {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		return lookupInt64(name, fs)
-	}
-	return 0
+	return lookupInt64(c.resolveFlagDeep(name))
 }
 
-func lookupInt64(name string, set *flag.FlagSet) int64 {
-	f := set.Lookup(name)
+func lookupInt64(f *flag.Flag) int64 {
 	if f != nil {
 		parsed, err := strconv.ParseInt(f.Value.String(), 0, 64)
 		if err != nil {

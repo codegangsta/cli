@@ -163,14 +163,10 @@ func (f *StringSliceFlag) Apply(set *flag.FlagSet) error {
 // StringSlice looks up the value of a local StringSliceFlag, returns
 // nil if not found
 func (c *Context) StringSlice(name string) []string {
-	if fs := lookupFlagSet(name, c); fs != nil {
-		return lookupStringSlice(name, fs)
-	}
-	return nil
+	return lookupStringSlice(c.resolveFlagDeep(name))
 }
 
-func lookupStringSlice(name string, set *flag.FlagSet) []string {
-	f := set.Lookup(name)
+func lookupStringSlice(f *flag.Flag) []string {
 	if f != nil {
 		if slice, ok := f.Value.(*StringSlice); ok {
 			return slice.Value()
