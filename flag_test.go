@@ -51,6 +51,19 @@ func TestBoolFlagApply_SetsAllNames(t *testing.T) {
 	expect(t, v, true)
 }
 
+func TestBoolFlagApply_SetsCount(t *testing.T) {
+	v := false
+	count := 0
+	fl := BoolFlag{Name: "wat", Aliases: []string{"W", "huh"}, Destination: &v, Count: &count}
+	set := flag.NewFlagSet("test", 0)
+	_ = fl.Apply(set)
+
+	err := set.Parse([]string{"--wat", "-W", "--huh"})
+	expect(t, err, nil)
+	expect(t, v, true)
+	expect(t, count, 3)
+}
+
 func TestFlagsFromEnv(t *testing.T) {
 	newSetFloat64Slice := func(defaults ...float64) Float64Slice {
 		s := NewFloat64Slice(defaults...)

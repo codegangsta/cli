@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -19,7 +20,51 @@ type BoolFlag struct {
 	DefaultText string
 	Destination *bool
 	HasBeenSet  bool
+	Count       *int
 }
+
+// boolValue needs to implement the boolFlag internal interface in flag
+// to be able to capture bool fields and values
+// type boolFlag interface {
+//	  Value
+//	  IsBoolFlag() bool
+// }
+type boolValue struct {
+	destination *bool
+	count       *int
+}
+
+func newBoolValue(val bool, p *bool, count *int) *boolValue {
+	*p = val
+	return &boolValue{
+		destination: p,
+		count:       count,
+	}
+}
+
+func (b *boolValue) Set(s string) error {
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		err = errors.New("parse error")
+		return err
+	}
+	*b.destination = v
+	if b.count != nil {
+		*b.count = *b.count + 1
+	}
+	return err
+}
+
+func (b *boolValue) Get() interface{} { return *b.destination }
+
+func (b *boolValue) String() string {
+	if b.destination != nil {
+		return strconv.FormatBool(*b.destination)
+	}
+	return strconv.FormatBool(false)
+}
+
+func (b *boolValue) IsBoolFlag() bool { return true }
 
 // IsSet returns whether or not the flag has been set through env or file
 func (f *BoolFlag) IsSet() bool {
@@ -79,11 +124,14 @@ func (f *BoolFlag) Apply(set *flag.FlagSet) error {
 	}
 
 	for _, name := range f.Names() {
+		var value flag.Value
 		if f.Destination != nil {
-			set.BoolVar(f.Destination, name, f.Value, f.Usage)
-			continue
+			value = newBoolValue(f.Value, f.Destination, f.Count)
+		} else {
+			t := new(bool)
+			value = newBoolValue(f.Value, t, f.Count)
 		}
-		set.Bool(name, f.Value, f.Usage)
+		set.Var(value, name, f.Usage)
 	}
 
 	return nil
