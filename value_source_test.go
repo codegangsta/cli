@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -299,6 +300,33 @@ func TestMapValueSource(t *testing.T) {
 			},
 		},
 		{
+			name: "Slice of any",
+			key:  "ports",
+			m: map[any]any{
+				"ports": []any{80, 443},
+			},
+			val:   "80,443",
+			found: true,
+		},
+		{
+			name: "Slice of strings",
+			key:  "hosts",
+			m: map[any]any{
+				"hosts": []string{"a.example", "b.example"},
+			},
+			val:   "a.example,b.example",
+			found: true,
+		},
+		{
+			name: "Empty slice",
+			key:  "ports",
+			m: map[any]any{
+				"ports": []any{},
+			},
+			val:   "",
+			found: true,
+		},
+		{
 			name: "Level 4 slice entry",
 			key:  "foo.bar.t.gh",
 			m: map[any]any{
@@ -310,7 +338,7 @@ func TestMapValueSource(t *testing.T) {
 					},
 				},
 			},
-			val:   "[10]",
+			val:   "10",
 			found: true,
 		},
 	}
@@ -340,4 +368,30 @@ func TestMapValueSourceStringer(t *testing.T) {
 
 	assert.Equal(t, `&mapValueSource{key:"bar", src:&mapSource{name:"test"}}`, mvs.GoString())
 	assert.Equal(t, `key "bar" from map source "test"`, mvs.String())
+}
+
+func TestMapValueSourceSliceFlags(t *testing.T) {
+	ms := NewMapSource("config", map[any]any{
+		"ports": []any{80, 443},
+		"hosts": []string{"a.example", "b.example"},
+	})
+
+	var ports []int
+	var hosts []string
+
+	cmd := &Command{
+		Flags: []Flag{
+			&IntSliceFlag{Name: "ports", Sources: NewValueSourceChain(NewMapValueSource("ports", ms))},
+			&StringSliceFlag{Name: "hosts", Sources: NewValueSourceChain(NewMapValueSource("hosts", ms))},
+		},
+		Action: func(_ context.Context, cmd *Command) error {
+			ports = cmd.IntSlice("ports")
+			hosts = cmd.StringSlice("hosts")
+			return nil
+		},
+	}
+
+	require.NoError(t, cmd.Run(context.Background(), []string{"app"}))
+	assert.Equal(t, []int{80, 443}, ports)
+	assert.Equal(t, []string{"a.example", "b.example"}, hosts)
 }
