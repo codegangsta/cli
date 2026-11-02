@@ -399,6 +399,62 @@ func TestHelpCommand_FullName(t *testing.T) {
 	}
 }
 
+func TestHelpCommand_NestedPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		args     []string
+		contains string
+	}{
+		{
+			name:     "help with a subcommand path",
+			args:     []string{"app", "help", "cmd", "subcmd"},
+			contains: "app cmd subcmd - runs subcmd",
+		},
+		{
+			name:     "help with a subcommand alias in the path",
+			args:     []string{"app", "help", "cmd", "s"},
+			contains: "app cmd subcmd - runs subcmd",
+		},
+		{
+			name:     "help flag with a subcommand path",
+			args:     []string{"app", "-h", "cmd", "subcmd"},
+			contains: "app cmd subcmd - runs subcmd",
+		},
+		{
+			name:     "help stops at an arg that is not a subcommand",
+			args:     []string{"app", "help", "cmd", "nope"},
+			contains: "app cmd - runs cmd",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := &bytes.Buffer{}
+			cmd := &Command{
+				Name: "app",
+				Commands: []*Command{
+					{
+						Name:  "cmd",
+						Usage: "runs cmd",
+						Commands: []*Command{
+							{
+								Name:    "subcmd",
+								Aliases: []string{"s"},
+								Usage:   "runs subcmd",
+							},
+						},
+					},
+				},
+				Writer:    out,
+				ErrWriter: out,
+			}
+
+			r := require.New(t)
+			r.NoError(cmd.Run(buildTestContext(t), tc.args))
+			r.Contains(out.String(), tc.contains)
+		})
+	}
+}
+
 func Test_helpCommand_HideHelpCommand(t *testing.T) {
 	buf := &bytes.Buffer{}
 	cmd := &Command{
