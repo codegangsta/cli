@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -250,9 +251,24 @@ func (mvs *mapValueSource) GoString() string {
 }
 
 func (mvs *mapValueSource) Lookup() (string, bool) {
-	if v, ok := mvs.ms.Lookup(mvs.key); !ok {
+	v, ok := mvs.ms.Lookup(mvs.key)
+	if !ok {
 		return "", false
-	} else {
-		return fmt.Sprintf("%+v", v), true
 	}
+
+	// A slice flag splits what it is given on the slice separator, so a list
+	// has to arrive as "80,443". Formatting it as a whole (%+v on a slice gives
+	// "[80 443]") hands the flag one element it cannot parse.
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		items := make([]string, rv.Len())
+
+		for i := 0; i < rv.Len(); i++ {
+			items[i] = fmt.Sprintf("%+v", rv.Index(i).Interface())
+		}
+
+		return strings.Join(items, ","), true
+	}
+
+	return fmt.Sprintf("%+v", v), true
 }
