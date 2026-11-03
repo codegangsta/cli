@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -310,7 +311,7 @@ func TestMapValueSource(t *testing.T) {
 					},
 				},
 			},
-			val:   "[10]",
+			val:   slPfx() + "[10]",
 			found: true,
 		},
 	}
@@ -340,4 +341,110 @@ func TestMapValueSourceStringer(t *testing.T) {
 
 	assert.Equal(t, `&mapValueSource{key:"bar", src:&mapSource{name:"test"}}`, mvs.GoString())
 	assert.Equal(t, `key "bar" from map source "test"`, mvs.String())
+}
+
+func TestMapValueSourceLists(t *testing.T) {
+	ms := NewMapSource("config", map[any]any{
+		"ports": []any{80, 443},
+		"hosts": []string{"a.example", "b.example"},
+		"empty": []any{},
+	})
+
+	var ports []int
+	var hosts []string
+	cmd := &Command{
+		Flags: []Flag{
+			&IntSliceFlag{Name: "ports", Sources: NewValueSourceChain(NewMapValueSource("ports", ms))},
+			&StringSliceFlag{Name: "hosts", Sources: NewValueSourceChain(NewMapValueSource("hosts", ms))},
+		},
+		Action: func(_ context.Context, cmd *Command) error {
+			ports = cmd.IntSlice("ports")
+			hosts = cmd.StringSlice("hosts")
+			return nil
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"app"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assert.Equal(t, []int{80, 443}, ports)
+	assert.Equal(t, []string{"a.example", "b.example"}, hosts)
+
+	var empty []string
+	cmd = &Command{
+		Flags: []Flag{
+			&StringSliceFlag{Name: "empty", Sources: NewValueSourceChain(NewMapValueSource("empty", ms))},
+		},
+		Action: func(_ context.Context, cmd *Command) error {
+			empty = cmd.StringSlice("empty")
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), []string{"app"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assert.Empty(t, empty)
+}
+
+// A value must survive the separator it is not split on: an element that
+// contains a comma, and a command that changes or disables the separator.
+func TestMapValueSourceListSeparators(t *testing.T) {
+	ms := NewMapSource("config", map[any]any{
+		"hosts": []string{"a,b.example", "c.example"},
+		"ports": []any{80, 443},
+	})
+
+	tests := []struct {
+		name  string
+		cmd   *Command
+		check func(t *testing.T, cmd *Command)
+	}{
+		{
+			name: "element with a comma",
+			cmd: &Command{
+				Flags: []Flag{
+					&StringSliceFlag{Name: "hosts", Sources: NewValueSourceChain(NewMapValueSource("hosts", ms))},
+				},
+			},
+			check: func(t *testing.T, cmd *Command) {
+				assert.Equal(t, []string{"a,b.example", "c.example"}, cmd.StringSlice("hosts"))
+			},
+		},
+		{
+			name: "custom separator",
+			cmd: &Command{
+				SliceFlagSeparator: ";",
+				Flags: []Flag{
+					&IntSliceFlag{Name: "ports", Sources: NewValueSourceChain(NewMapValueSource("ports", ms))},
+				},
+			},
+			check: func(t *testing.T, cmd *Command) {
+				assert.Equal(t, []int{80, 443}, cmd.IntSlice("ports"))
+			},
+		},
+		{
+			name: "separator disabled",
+			cmd: &Command{
+				DisableSliceFlagSeparator: true,
+				Flags: []Flag{
+					&IntSliceFlag{Name: "ports", Sources: NewValueSourceChain(NewMapValueSource("ports", ms))},
+				},
+			},
+			check: func(t *testing.T, cmd *Command) {
+				assert.Equal(t, []int{80, 443}, cmd.IntSlice("ports"))
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.cmd.Action = func(_ context.Context, cmd *Command) error {
+				test.check(t, cmd)
+				return nil
+			}
+			if err := test.cmd.Run(context.Background(), []string{"app"}); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
 }
