@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -294,6 +298,59 @@ func TestCompletionBashOmitsPositionalTokenFromDynamicCompletion(t *testing.T) {
 	r.Contains(output, `if [[ "${current_word}" == "-"* ]]; then`)
 	r.Contains(output, `printf '%s %s --generate-shell-completion' "${words_before_cursor[*]}" "${current_word}"`)
 	r.Contains(output, `printf '%s --generate-shell-completion' "${words_before_cursor[*]}"`)
+}
+
+func TestCompletionPowershellCompletesCurrentWord(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the app is stood in for by a .cmd script")
+	}
+	powershell, err := exec.LookPath("powershell")
+	if err != nil {
+		t.Skip("Windows PowerShell is not available")
+	}
+
+	r := require.New(t)
+	dir := t.TempDir()
+
+	script, err := shellCompletions["pwsh"](&Command{}, "myapp")
+	r.NoError(err)
+	scriptPath := filepath.Join(dir, "myapp.ps1")
+	r.NoError(os.WriteFile(scriptPath, []byte(script), 0o644))
+
+	// Stands in for an app with the subcommands "add", "status" and "sync",
+	// where "sync" completes its own arguments.
+	binDir := filepath.Join(dir, "bin")
+	r.NoError(os.Mkdir(binDir, 0o755))
+	app := strings.Join([]string{
+		"@echo off",
+		`if "%~1"=="sync" (echo localhost& exit /b 0)`,
+		"echo add:add a thing",
+		"echo status:show status",
+		"echo sync:sync it",
+	}, "\r\n")
+	r.NoError(os.WriteFile(filepath.Join(binDir, "myapp.cmd"), []byte(app), 0o644))
+
+	driver := `$env:PATH = $args[0] + ';' + $env:PATH
+. $args[1]
+foreach ($line in 'myapp st', 'myapp sync', 'myapp sync ') {
+    $result = TabExpansion2 -inputScript $line -cursorColumn $line.Length
+    '{0}|{1}' -f $line, (($result.CompletionMatches | ForEach-Object CompletionText) -join ',')
+}
+`
+	driverPath := filepath.Join(dir, "driver.ps1")
+	r.NoError(os.WriteFile(driverPath, []byte(driver), 0o644))
+
+	out, err := exec.Command(
+		powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+		"-File", driverPath, binDir, scriptPath,
+	).CombinedOutput()
+	r.NoError(err, string(out))
+
+	r.Equal([]string{
+		"myapp st|status",
+		"myapp sync|sync",
+		"myapp sync |localhost",
+	}, strings.FieldsFunc(string(out), func(c rune) bool { return c == '\r' || c == '\n' }))
 }
 
 func TestCompletionSubcommand(t *testing.T) {
