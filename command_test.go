@@ -6438,6 +6438,7 @@ func TestCommandMapKeyValueFlagSeparatorHelp(t *testing.T) {
 	for _, args := range [][]string{
 		{"app", "--help"},
 		{"app", "sub", "--help"},
+		{"app", "help", "sub"},
 		{"app", "--labels", "env=prod"},
 	} {
 		t.Run(strings.Join(args[1:], " "), func(t *testing.T) {
