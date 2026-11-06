@@ -448,3 +448,153 @@ func TestMapValueSourceListSeparators(t *testing.T) {
 		})
 	}
 }
+
+// A list from a map source must reach the flag through its own element parser,
+// not through a JSON decode that silently produces zero values, and a scalar
+// flag must never see the internal serialization prefix.
+func TestMapValueSourceListsWithMismatchedTypes(t *testing.T) {
+	ms := NewMapSource("config", map[any]any{
+		"anyints":  []any{80, 443},
+		"strings":  []string{"80", "443"},
+		"mixed":    []any{"a", 2, true},
+		"negative": []any{-1},
+		"plain":    []string{"x", "y"},
+	})
+
+	for _, tc := range []struct {
+		name    string
+		flag    Flag
+		want    any
+		wantErr bool
+	}{
+		{
+			name: "ints in a string slice read as their digits",
+			flag: &StringSliceFlag{Name: "anyints", Sources: NewValueSourceChain(NewMapValueSource("anyints", ms))},
+			want: []string{"80", "443"},
+		},
+		{
+			name: "strings in an int slice are parsed",
+			flag: &IntSliceFlag{Name: "strings", Sources: NewValueSourceChain(NewMapValueSource("strings", ms))},
+			want: []int{80, 443},
+		},
+		{
+			name: "mixed elements all arrive",
+			flag: &StringSliceFlag{Name: "mixed", Sources: NewValueSourceChain(NewMapValueSource("mixed", ms))},
+			want: []string{"a", "2", "true"},
+		},
+		{
+			name:    "a negative into an unsigned slice is an error, not a zero",
+			flag:    &UintSliceFlag{Name: "negative", Sources: NewValueSourceChain(NewMapValueSource("negative", ms))},
+			wantErr: true,
+		},
+		{
+			name: "a list into a scalar flag never carries the prefix",
+			flag: &StringFlag{Name: "plain", Sources: NewValueSourceChain(NewMapValueSource("plain", ms))},
+			want: "x,y",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got any
+			cmd := &Command{
+				Flags: []Flag{tc.flag},
+				Action: func(_ context.Context, cmd *Command) error {
+					switch f := tc.flag.(type) {
+					case *StringSliceFlag:
+						got = cmd.StringSlice(f.Name)
+					case *IntSliceFlag:
+						got = cmd.IntSlice(f.Name)
+					case *UintSliceFlag:
+						got = cmd.UintSlice(f.Name)
+					case *StringFlag:
+						got = cmd.String(f.Name)
+					}
+					return nil
+				},
+			}
+			err := cmd.Run(context.Background(), []string{"app"})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got %v", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// The serialized form is scanned without a JSON decoder, so the elements that
+// a decoder would unescape have to arrive intact: the separator inside a
+// value, quotes, backslashes, a newline, empty strings and brackets.
+func TestMapValueSourceListElementsSurviveTheSerializedForm(t *testing.T) {
+	want := []string{
+		"a,b",
+		`he said "hi"`,
+		`back\slash`,
+		"emoji 🎉",
+		"",
+		"[brackets]",
+		"line\nbreak",
+		"tab\there",
+	}
+	ms := NewMapSource("tricky", map[any]any{"tricky": want})
+
+	var got []string
+	cmd := &Command{
+		Flags: []Flag{
+			&StringSliceFlag{Name: "tricky", Sources: NewValueSourceChain(NewMapValueSource("tricky", ms))},
+		},
+		Action: func(_ context.Context, cmd *Command) error {
+			got = cmd.StringSlice("tricky")
+			return nil
+		},
+	}
+	require.NoError(t, cmd.Run(context.Background(), []string{"app"}))
+	assert.Equal(t, want, got)
+}
+
+// The serialized scanner is hand-written, so its refusals are pinned here: a
+// value that is not the flat array Serialize writes must come back as an
+// error, never as a silently truncated list.
+func TestSerializedListElements(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		in      string
+		want    []string
+		wantErr bool
+	}{
+		{name: "strings", in: `["a","b"]`, want: []string{"a", "b"}},
+		{name: "empty array", in: `[]`, want: []string{}},
+		{name: "null", in: `null`},
+		{name: "numbers and bools", in: `[80,-1,true]`, want: []string{"80", "-1", "true"}},
+		{name: "escapes", in: `["a,b","he said \"hi\"","back\\slash",""]`, want: []string{"a,b", `he said "hi"`, `back\slash`, ""}},
+		{name: "object", in: `{"a":1}`, wantErr: true},
+		{name: "unterminated string", in: `["abc]`, wantErr: true},
+		{name: "bad escape", in: `["\q"]`, wantErr: true},
+		{name: "nested value", in: `[{"a":1}]`, wantErr: true},
+		{name: "missing comma", in: `["a" "b"]`, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := serializedListElements(tc.in)
+			if tc.wantErr {
+				require.Error(t, err, "got %q", got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// A malformed serialized value reaches the caller as an error, not as an empty
+// list.
+func TestSliceBaseRejectsAMalformedSerializedValue(t *testing.T) {
+	var dest []string
+	v := StringSlice{}.Create([]string{"old"}, &dest, StringConfig{})
+	require.NoError(t, v.Set("a,b"))
+	require.Error(t, v.Set(slPfx()+`["c"`))
+	assert.Equal(t, []string{"a", "b"}, dest)
+}
