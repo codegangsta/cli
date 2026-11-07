@@ -146,6 +146,7 @@ func TestFishCompletionPersistentFlags(t *testing.T) {
 				Flags:    []Flag{&IntFlag{Name: "name", Usage: "sub name"}},
 				Commands: []*Command{{Name: "deep"}},
 			},
+			{Name: "exec", SkipFlagParsing: true},
 		},
 	}
 
@@ -159,6 +160,8 @@ func TestFishCompletionPersistentFlags(t *testing.T) {
 	// but not a local flag, or the root's flag that the subcommand redefines
 	assert.NotContains(t, res, "__fish_seen_subcommand_from sub' -f -l dry-run")
 	assert.Equal(t, 1, strings.Count(res, "__fish_seen_subcommand_from sub' -f -l name"))
+	// nor a root flag after a subcommand that skips flag parsing
+	assert.NotContains(t, res, "__fish_seen_subcommand_from exec' -f -l verbose")
 }
 
 func TestFishCompletionUsesFirstLineOfUsage(t *testing.T) {
