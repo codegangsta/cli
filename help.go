@@ -548,11 +548,13 @@ func wrap(input string, offset int, wrapAt int) string {
 }
 
 func wrapLine(input string, offset int, wrapAt int, padding string) string {
-	if wrapAt <= offset || len(input) <= wrapAt-offset {
+	lineWidth := wrapAt - offset
+
+	// Like offset, count runes rather than bytes.
+	if lineWidth <= 0 || utf8.RuneCountInString(input) <= lineWidth {
 		return input
 	}
 
-	lineWidth := wrapAt - offset
 	words := strings.Fields(input)
 	if len(words) == 0 {
 		return input
@@ -560,14 +562,15 @@ func wrapLine(input string, offset int, wrapAt int, padding string) string {
 
 	var wrapped strings.Builder
 	wrapped.WriteString(words[0])
-	spaceLeft := lineWidth - len(words[0])
+	spaceLeft := lineWidth - utf8.RuneCountInString(words[0])
 	for _, word := range words[1:] {
-		if len(word)+1 > spaceLeft {
+		width := utf8.RuneCountInString(word)
+		if width+1 > spaceLeft {
 			wrapped.WriteString("\n" + padding + word)
-			spaceLeft = lineWidth - len(word)
+			spaceLeft = lineWidth - width
 		} else {
 			wrapped.WriteString(" " + word)
-			spaceLeft -= 1 + len(word)
+			spaceLeft -= 1 + width
 		}
 	}
 
