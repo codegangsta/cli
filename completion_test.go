@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -298,6 +301,41 @@ func TestCompletionBashOmitsPositionalTokenFromDynamicCompletion(t *testing.T) {
 	r.Contains(output, `if [[ "${current_word}" == "-"* ]]; then`)
 	r.Contains(output, `printf '%s %s --generate-shell-completion' "${words_before_cursor[*]}" "${current_word}"`)
 	r.Contains(output, `printf '%s --generate-shell-completion' "${words_before_cursor[*]}"`)
+}
+
+func TestCompletionBashDoesNotExpandCandidates(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash completion is not tested on Windows")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not found")
+	}
+
+	r := require.New(t)
+
+	script, err := shellCompletions["bash"](&Command{}, "app")
+	r.NoError(err)
+
+	// The fake app prints a candidate that runs touch if bash expands it.
+	cmd := exec.Command(bash, "-c", `
+app() { echo build; echo '$(touch${IFS}expanded)'; }
+# Stub for bash-completion's _comp_initialize.
+_comp_initialize() { cur=${COMP_WORDS[COMP_CWORD]}; words=("${COMP_WORDS[@]}"); cword=$COMP_CWORD; }
+eval "$1"
+# COMP_TYPE 9 is the first TAB, 63 the second (the listing).
+COMP_WORDS=(app '') COMP_CWORD=1
+for COMP_TYPE in 9 63; do
+	__app_bash_autocomplete
+	printf '%s\n' "${COMPREPLY[@]}"
+done
+`, "bash", script)
+	cmd.Dir = t.TempDir()
+
+	out, err := cmd.Output()
+	r.NoError(err)
+	r.Equal(strings.Repeat("build\n$(touch${IFS}expanded)\n", 2), string(out))
+	r.NoFileExists(filepath.Join(cmd.Dir, "expanded"))
 }
 
 func TestCompletionSubcommand(t *testing.T) {
